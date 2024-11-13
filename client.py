@@ -1,6 +1,9 @@
 import socket
 import fnmatch
 
+# conn = sqlite3.connect('filesystem.db')
+# cursor = conn.cursor()
+
 def cd(client_socket, cwd, arg):
     # checking for absolute path and relative path
     det_path = arg[0:3]
@@ -25,6 +28,44 @@ def ls(client_socket, cwd):
         print("\t".join(objects[i:i+4]))
 
 
+def upload(file_name, directory_id):
+
+    # cursor.execute("SELECT id FROM directories WHERE id = ?", (directory_id,))
+    # if not cursor.fetchone():
+    #     print("Directory does not exist.")
+    #     return
+    
+    # cursor.execute("INSERT INTO files (name, dir_id) VALUES (?, ?)", (file_name, directory_id))
+    # conn.commit()
+    # print(f"File '{file_name}' uploaded to directory ID {directory_id}.")
+
+    pass
+
+
+def download(file_name, directory_id):
+
+    # Retrieve file
+    # cursor.execute("SELECT * FROM files WHERE name = ? AND dir_id = ?", (file_name, directory_id))
+    # file = cursor.fetchone()
+
+    # if file:
+    #     print(f"File '{file_name}' downloaded from directory ID {directory_id}.")
+    # else:
+    #     print("File does not exist in the specified directory.")
+    pass
+
+
+def delete(file_name, directory_id):
+
+    # cursor.execute("DELETE FROM files WHERE name = ? AND dir_id = ?", (file_name, directory_id))
+    # conn.commit()
+
+    # if cursor.rowcount > 0:
+    #     print(f"File '{file_name}' deleted from directory ID {directory_id}.")
+    # else:
+    #     print("File does not exist in the specified directory.")
+    pass
+
 def client_program():
     host = socket.gethostname()  # as both code is running on same pc
     port = 5000  # socket server port number
@@ -33,7 +74,7 @@ def client_program():
     client_socket.connect((host, port))  # connect to the server
 	
     message = ""
-    cwd = "/"
+    cwd = 1
     while True:
         message = input("[user]$ ")
         if message == 'exit':
