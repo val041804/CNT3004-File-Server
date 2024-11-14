@@ -23,48 +23,53 @@ def cd(client_socket, cwd, arg):
 
 def ls(client_socket, cwd):
     # server returns array of current objects in cwd
-    objects = ["dir1", "dir2", "dir3", "dir4", "file1"]
-    for i in range(0, len(objects), 4):
-        print("\t".join(objects[i:i+4]))
+    # objects = ["dir1", "dir2", "dir3", "dir4", "file1"]
+    # for i in range(0, len(objects), 4):
+    #     print("\t".join(objects[i:i+4]))
+
+    # dirs = cursor.execute("SELECT * FROM directories WHERE parent = ?, (cwd,)")
+    # files = cursor.execute("SELECT * FROM files WHERE dir_id = ?, (cwd,)")
+
+    pass
 
 
-def upload(file_name, directory_id):
+def upload(file_name, cwd):
 
-    # cursor.execute("SELECT id FROM directories WHERE id = ?", (directory_id,))
+    # cursor.execute("SELECT id FROM directories WHERE id = ?", (cwd,))
     # if not cursor.fetchone():
     #     print("Directory does not exist.")
     #     return
     
-    # cursor.execute("INSERT INTO files (name, dir_id) VALUES (?, ?)", (file_name, directory_id))
+    # cursor.execute("INSERT INTO files (name, dir_id) VALUES (?, ?)", (file_name, cwd))
     # conn.commit()
-    # print(f"File '{file_name}' uploaded to directory ID {directory_id}.")
-
+    # print(f"File '{file_name}' uploaded to directory ID {cwd}.")
     pass
 
 
-def download(file_name, directory_id):
+def download(file_name, cwd):
 
     # Retrieve file
-    # cursor.execute("SELECT * FROM files WHERE name = ? AND dir_id = ?", (file_name, directory_id))
+    # cursor.execute("SELECT * FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
     # file = cursor.fetchone()
 
     # if file:
-    #     print(f"File '{file_name}' downloaded from directory ID {directory_id}.")
+    #     print(f"File '{file_name}' downloaded from directory ID {cwd}.")
     # else:
     #     print("File does not exist in the specified directory.")
     pass
 
 
-def delete(file_name, directory_id):
+def delete(file_name, cwd):
 
-    # cursor.execute("DELETE FROM files WHERE name = ? AND dir_id = ?", (file_name, directory_id))
+    # cursor.execute("DELETE FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
     # conn.commit()
 
     # if cursor.rowcount > 0:
-    #     print(f"File '{file_name}' deleted from directory ID {directory_id}.")
+    #     print(f"File '{file_name}' deleted from directory ID {cwd}.")
     # else:
     #     print("File does not exist in the specified directory.")
     pass
+
 
 def client_program():
     host = socket.gethostname()  # as both code is running on same pc
