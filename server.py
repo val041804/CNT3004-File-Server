@@ -2,7 +2,23 @@ import socket
 from _thread import *
 import threading
 
+import sqlite3
+
+
 print_lock = threading.Lock()
+
+def send_file(conn, file_name, cwd):
+    # db_conn = sqlite3.connect('dbname.db')
+    # db_cursor = db_conn.cursor()
+
+    # Retrieve file
+
+    # db_cursor.execute("SELECT * FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
+    # file_data = db_cursor.fetchone()
+    # db_cursor.close()
+
+    # if file_data is not None:
+        # conn.sendall(file_data)
 
 
 def threaded_server(conn):

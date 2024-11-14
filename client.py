@@ -33,7 +33,11 @@ def ls(client_socket, cwd):
     pass
 
 
-def upload(file_name, cwd):
+def upload(client_socket, host_path, cwd):
+    # sending actual file
+    with open(host_path, 'rb') as file:
+        while(chunk := file.read(1024)):
+            client_socket.sendall(chunk)
 
     # cursor.execute("SELECT id FROM directories WHERE id = ?", (cwd,))
     # if not cursor.fetchone():
@@ -46,20 +50,14 @@ def upload(file_name, cwd):
     pass
 
 
-def download(file_name, cwd):
+def download(client_socket, file_name, cwd):
 
-    # Retrieve file
-    # cursor.execute("SELECT * FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
-    # file = cursor.fetchone()
+    # Request server to send_file
 
-    # if file:
-    #     print(f"File '{file_name}' downloaded from directory ID {cwd}.")
-    # else:
-    #     print("File does not exist in the specified directory.")
     pass
 
 
-def delete(file_name, cwd):
+def delete(client_socket, file_name, cwd):
 
     # cursor.execute("DELETE FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
     # conn.commit()
