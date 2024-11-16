@@ -6,6 +6,7 @@ import sqlite3
 
 SIZE = 1024
 print_lock = threading.Lock()
+BASE_DIR = ""
 
 def send_file(conn, file_name, cwd):
     # db_conn = sqlite3.connect('dbname.db')
@@ -26,14 +27,13 @@ def upload(conn, file, cwd):
 
     db = sqlite3.connect('filesystem.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM directories WHERE id = ?", (cwd,))
+    cursor.execute("SELECT name FROM directories WHERE name = ?", (cwd,))
     if not cursor.fetchone():
         conn.send("Directory: {cwd} does not exist")
         return
     
     filename = conn.recv(SIZE).decode()
     conn.send("Recieving file...").encode()
-
 
     with open(filename, 'wb') as file:
         while True:
@@ -50,6 +50,21 @@ def upload(conn, file, cwd):
     conn.send("Uploaded file: {filename}")
 
 
+def cd(conn, cwd, new_dir):
+    db = sqlite3.connect('filesystem.db')
+    cursor = conn.cursor()
+
+    # make sure the dir exists, then return it
+    cursor.execute("SELECT name FROM directories WHERE parent = ?", (cwd,))
+    if not cursor.fetchone():
+        conn.send("Directory: {cwd} does not exist")
+        return
+    
+    if new_dir in cursor.fetchall():
+        conn.send(new_dir)
+        conn.send("cd sucessful to: {new_dir}")
+
+
 def threaded_server(conn):
     while True:
         # receive data stream. it won't accept data packet greater than 1024 bytes
@@ -62,9 +77,10 @@ def threaded_server(conn):
         args = data.split()[1:]
 
         match cmd:
+            case "cd":
+                cd(conn, args[1], args[2]) #cd cwd newdir
             case "upload":
                 upload(conn, args[1], args[2]) # upload filename cwd
-                
                 
         conn.send(str(f'{str_data} ---> received').encode())
 
