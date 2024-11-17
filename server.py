@@ -21,11 +21,16 @@ def download(conn, filename, cwd):
         file_data = cursor.fetchone()
         cursor.close()
 
-        print(file_data)
         if file_data is None or file_data[0] is None:
             message = f"File: {filename} is not found"
             send_response(conn, 400, message)
             return
+        send_response(conn, 200) # ACK
+        
+        # client needs to create file and receive file binary
+        for i in range(0, len(file_data), BUFFER_SIZE):
+            conn.sendall(file_data[i:i+BUFFER_SIZE])
+        conn.sendall(b"EOF")
 
         send_response(conn, 200, data=file_data[0])
         print(f"Sent file: {filename} to client")
@@ -65,18 +70,7 @@ def upload(conn, filename, cwd):
                 break
             fileData += data
 
-        # with open(f"f_{filename}", 'wb') as file:
-        #     while True:
-        #         data = conn.recv(BUFFER_SIZE)
-        #         if b'EOF' in data:  # Check for the end marker
-        #             file.write(data.replace(b'EOF', b''))  # Remove the marker
-        #             break
-        #         file.write(data)
-
         print(f"File: '{filename}' received")
-
-        # with open(f"f_{filename}", 'rb') as f:
-        #     data = f.read()
 
         type = get_file_type(filename)
         size = len(fileData)
@@ -100,19 +94,33 @@ def upload(conn, filename, cwd):
         return
 
 
-def cd(conn, cwd, new_dir):
+def cd(conn, cwd, new_dir, type):
     db = sqlite3.connect(DB_NAME)
     cursor = db.cursor()
 
-    # make sure the dir exists, then return it
-    cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
-    if not cursor.fetchone():
-        conn.send(f"Directory: {cwd} does not exist")
-        return
+    if type == "r":
+        # make sure the dir exists, then return it
+        cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
+        if not cursor.fetchone():
+            conn.send(f"Directory: {cwd} does not exist")
+            return
+        db.close()
+
+        if new_dir in cursor.fetchall():
+            message = f"cd to {new_dir} successful"
+            send_response(conn, 200, message, data=new_dir) # data is the actual new dir
+
+    elif type == "a":
+        pass
+    elif type == "b":
+        cursor.execute("SELECT parent FROM Directories WHERE name = ?", (cwd,))
+        if cursor.fetchall():
+            new_dir = cursor.fetchone()[0]
+            message = f"cd to {new_dir} successful"
+            send_response(conn, 200, message, new_dir)
+    else:
+        pass
     
-    if new_dir in cursor.fetchall():
-        conn.send(new_dir)
-        conn.send(f"cd sucessful to: {new_dir}")
 
 
 def setup_db():
@@ -126,6 +134,7 @@ def setup_db():
     FOREIGN KEY (parent) REFERENCES Directories(name) ON DELETE CASCADE
     );
     ''')
+
 
     cursor.execute('''INSERT OR IGNORE INTO Directories(name, parent) VALUES ("home", "home");''')
 
@@ -190,9 +199,9 @@ def threaded_server(conn):
 
         match args[0]:
             case "cd":
-                cd(conn, args[1], args[2]) #cd cwd newdir
+                cd(conn, args[1], args[2], args[3]) #cd cwd newdir (a,r,b)
             case "upload":
-                upload(conn, args[1], args[2]) # upload filename cwd
+                upload(conn, args[1], args[2]) # upload filename cwd 
             case "quit":
                 break
         #send_response(....?)

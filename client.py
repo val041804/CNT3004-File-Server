@@ -9,6 +9,11 @@ def cd(client_socket, cwd, arg):
     # checking for absolute path and relative path
     det_path = arg[0:3]
 
+    # NOTE FROM ANDREW: to do something like cd dir1/dir2, just have it call cd recursively, first on dir1, then dir2, .. etc
+    # for absolute option, that can also be converted into recursive relative cd just starting from root
+    # send first packet like: cd {cwd} {newDir} {(a,r,b)}
+    # a: absolute, r: relative, b: backwards
+
     match det_path:
         # absolute path
         case det_path if fnmatch.fnmatch(det_path, "/*"):
