@@ -37,12 +37,13 @@ def ls(client_socket, cwd):
 
 
 def upload(client_socket, filename, cwd):
-   
+    # ONLY HANDLES IF FILE IS IN LOCAL DIR
+
     # Check if the file exists
     if not os.path.isfile(filename):
         print(f"File '{filename}' does not exist.")
         return
-
+    
     message = f"upload {filename} {cwd}"
     client_socket.send(message.encode())
 
@@ -75,7 +76,6 @@ def upload(client_socket, filename, cwd):
         return
     
     print(response["message"])
-    client_socket.close()
 
 
 def download(client_socket, file_name, cwd):

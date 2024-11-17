@@ -7,7 +7,7 @@ import json
 import os
 
 BUFFER_SIZE = 1024
-TIMEOUT = 15
+TIMEOUT = 30
 print_lock = threading.Lock()
 BASE_DIR = ""
 DB_NAME = "filesystem.db"
@@ -39,13 +39,11 @@ def download(conn, filename, cwd):
     except sqlite3.Error as e:
         message = f"Database error: {e}"
         send_response(conn, 400, message)
-        print(f"Error accessing the database: {e}")
         return
 
     except Exception as e:
         message = f"Unexpected error: {e}"
         send_response(conn, 400, message)
-        print(f"Unexpected error: {e}")
         return
 
 
@@ -66,9 +64,9 @@ def upload(conn, filename, cwd):
         if cursor.fetchone():
             message = f"File: {filename} already exists. Replace it? (y/n)"
             send_response(conn, 400, message, data="replace")
-            answer = conn.recv(BUFFER_SIZE).decode()
+            answer = conn.recv(BUFFER_SIZE).decode().strip().lower()
 
-            if answer == "n":
+            if answer != "y":
                 message = "OK upload terminated"
                 send_response(conn, 400, message)
                 return
@@ -88,10 +86,16 @@ def upload(conn, filename, cwd):
         print(f"File: '{filename}' received")
 
         type = get_file_type(filename)
+        gb = len(fileData) / 1000000000
+        max_size = get_max_size(type)
+        if gb > max_size:
+            message = f"File type: {type} cannot be greater than {max_size} GB"
+            send_response(conn, 400, message)
+            return
+
         size = len(fileData)
         cursor.execute("INSERT OR REPLACE INTO Files (fileName, fileParent, fileType, fileBytes, fileData) VALUES (?, ?, ?, ?, ?)", (filename, cwd, type, size, fileData))
         db.commit()
-        db.close()
 
         message = f"File: {filename} sucessfully uploaded"
         send_response(conn, 200, message)
@@ -99,14 +103,15 @@ def upload(conn, filename, cwd):
     except sqlite3.Error as e:
         message = f"Database error: {e}"
         send_response(conn, 400, message)
-        print(f"Error accessing the database: {e}")
         return
 
     except Exception as e:
         message = f"Unexpected error: {e}"
         send_response(conn, 400, message)
-        print(f"Unexpected error: {e}")
         return
+    
+    finally:
+        db.close()
 
 
 def cd(conn, cwd, new_dir, type):
@@ -156,15 +161,38 @@ def ls(conn, cwd):
     except sqlite3.Error as e:
         message = f"Database error: {e}"
         send_response(conn, 400, message)
-        print(f"Error accessing the database: {e}")
         return
 
     except Exception as e:
         message = f"Unexpected error: {e}"
         send_response(conn, 400, message)
-        print(f"Unexpected error: {e}")
         return
 
+
+def delete(conn, filename, cwd):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+
+        if not cursor.fetchone():
+            message = f"File: {filename} does not exist in this directory"
+            send_response(conn, 400, message)
+
+        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+        message = f"File: {filename} deleted"
+        send_response(conn, 200, message)
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}"
+        send_response(conn, 400, message)
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}"
+        send_response(conn, 400, message)
+        return
 
 def setup_db():
     conn = sqlite3.connect(DB_NAME)
@@ -180,9 +208,6 @@ def setup_db():
 
     cursor.execute('''INSERT OR IGNORE INTO Directories(name, parent) VALUES ("home", "home");''')
 
-    cursor.execute('''SELECT * FROM Files WHERE fileParent = "home";''')
-    print(cursor.fetchall())
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Files (
     fileName TEXT NOT NULL,
@@ -194,6 +219,9 @@ def setup_db():
     FOREIGN KEY (fileParent) REFERENCES Directories(name) ON DELETE CASCADE
     );
     ''')
+
+    cursor.execute('''SELECT fileName, fileType, fileBytes FROM Files WHERE fileParent = "home";''')
+    print(cursor.fetchall())
 
     conn.commit()
     conn.close()
@@ -219,6 +247,21 @@ def get_file_type(filename):
         return "unknown"
     
 
+# Returns max size of each type in gb's
+def get_max_size(type):
+    match type:
+        case "audio":
+            return 0.5
+        case "text":
+            return 0.025
+        case "video":
+            return 2
+        case "image":
+            return .01
+        case _:
+            return 1
+        
+
 def send_response(conn, status, message = None, data = None):
     response = {
         "status": status,
@@ -226,6 +269,7 @@ def send_response(conn, status, message = None, data = None):
         "data": data
     }
 
+    print(message)
     conn.send(json.dumps(response).encode())
 
 
@@ -246,6 +290,10 @@ def threaded_server(conn):
                 ls(conn, args[1]) # ls cwd
             case "upload":
                 upload(conn, args[1], args[2]) # upload filename cwd 
+            case "download":
+                download(conn, args[1], args[2]) # download filename cwd
+            case "delete":
+                delete(conn, args[1], args[2]) # delete filname cwd
             case "quit":
                 break
         #send_response(....?)
