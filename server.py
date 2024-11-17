@@ -1,10 +1,10 @@
 import socket
 from _thread import *
 import threading
-import fnmatch
 import sqlite3
 import json
 import os
+from utils import *
 
 BUFFER_SIZE = 1024
 TIMEOUT = 30
@@ -194,84 +194,31 @@ def delete(conn, filename, cwd):
         send_response(conn, 400, message)
         return
 
-def setup_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS Directories (
-    name TEXT NOT NULL,
-    parent TEXT NOT NULL,
-    PRIMARY KEY (name, parent)
-    FOREIGN KEY (parent) REFERENCES Directories(name) ON DELETE CASCADE
-    );
-    ''')
 
-    cursor.execute('''INSERT OR IGNORE INTO Directories(name, parent) VALUES ("home", "home");''')
+def mkdir(conn, name, cwd):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS Files (
-    fileName TEXT NOT NULL,
-    fileParent TEXT NOT NULL,
-    fileType TEXT NOT NULL,
-    fileBytes FLOAT NOT NULL,
-    fileData BLOB NOT NULL,
-    PRIMARY KEY (fileName, fileParent)
-    FOREIGN KEY (fileParent) REFERENCES Directories(name) ON DELETE CASCADE
-    );
-    ''')
-
-    cursor.execute('''SELECT fileName, fileType, fileBytes FROM Files WHERE fileParent = "home";''')
-    print(cursor.fetchall())
-
-    conn.commit()
-    conn.close()
-
-
-def get_file_type(filename):
-    extension = filename.split('.', 1)[1]
-
-    audio = ["mp3", "wav"]
-    text = ["txt", "cpp", "py", "md"]
-    image = [".jpg", "png"]
-    video = ["mp4", "avi"]
-
-    if extension in audio:
-        return "audio"
-    elif extension in text:
-        return "text"
-    elif extension in image:
-        return "image"
-    elif extension in video:
-        return "video"
-    else:
-        return "unknown"
-    
-
-# Returns max size of each type in gb's
-def get_max_size(type):
-    match type:
-        case "audio":
-            return 0.5
-        case "text":
-            return 0.025
-        case "video":
-            return 2
-        case "image":
-            return .01
-        case _:
-            return 1
+        if not cursor.fetchone():
+            message = f"Directory: {cwd} does not exist"
+            send_response(conn, 400, message)
+            return
         
+        cursor.execute("INSERT INTO Directories(name, parent) VALUES(?, ?)", (name, cwd))
+        message = f"Successfully created directory: {name}"
+        send_response(conn, 200, message)
 
-def send_response(conn, status, message = None, data = None):
-    response = {
-        "status": status,
-        "message": message,
-        "data": data
-    }
+    except sqlite3.Error as e:
+        message = f"Database error: {e}"
+        send_response(conn, 400, message)
+        return
 
-    print(message)
-    conn.send(json.dumps(response).encode())
-
+    except Exception as e:
+        message = f"Unexpected error: {e}"
+        send_response(conn, 400, message)
+        return
+    
 
 def threaded_server(conn):
     while True:
@@ -293,7 +240,9 @@ def threaded_server(conn):
             case "download":
                 download(conn, args[1], args[2]) # download filename cwd
             case "delete":
-                delete(conn, args[1], args[2]) # delete filname cwd
+                delete(conn, args[1], args[2]) # delete filename cwd
+            case "mkdir":
+                mkdir(conn, args[1], args[2]) # mkdir name cwd
             case "quit":
                 break
         #send_response(....?)
@@ -305,7 +254,7 @@ def run_server():
     # get the hostname
     host = socket.gethostname()
     port = 5000  # initiate port no above 1024
-    setup_db()
+    setup_db(DB_NAME)
 
 
     server_socket = socket.socket() 
