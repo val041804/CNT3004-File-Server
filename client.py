@@ -1,8 +1,9 @@
 import socket
 import fnmatch
+import os
+import json
 
-# conn = sqlite3.connect('filesystem.db')
-# cursor = conn.cursor()
+BUFFER_SIZE = 1024
 
 def cd(client_socket, cwd, arg):
     # checking for absolute path and relative path
@@ -33,21 +34,35 @@ def ls(client_socket, cwd):
     pass
 
 
-def upload(client_socket, host_path, cwd):
-    # sending actual file
-    with open(host_path, 'rb') as file:
-        while(chunk := file.read(1024)):
-            client_socket.sendall(chunk)
+def upload(client, filename, cwd):
+   
+    # Check if the file exists
+    if not os.path.isfile(filename):
+        print(f"File '{filename}' does not exist.")
+        return
 
-    # cursor.execute("SELECT id FROM directories WHERE id = ?", (cwd,))
-    # if not cursor.fetchone():
-    #     print("Directory does not exist.")
-    #     return
+    message = f"upload {filename} {cwd}"
+    client.send(message.encode())
+
+    response = json.loads(client.recv(BUFFER_SIZE).decode())
+    if response["status"] == 400:
+        print(response["message"])
+        return
+
+    print("Uploading file...")
+    # Send the file data in chunks
+    with open(filename, 'rb') as file:
+        while chunk := file.read(BUFFER_SIZE):
+            client.send(chunk)
+    client.send(b'EOF') # signal end of file 
+
+    response = json.loads(client.recv(BUFFER_SIZE).decode())
+    if response["status"] == 400:
+        print(response["message"])
+        return
     
-    # cursor.execute("INSERT INTO files (name, dir_id) VALUES (?, ?)", (file_name, cwd))
-    # conn.commit()
-    # print(f"File '{file_name}' uploaded to directory ID {cwd}.")
-    pass
+    print(response["message"])
+    client.close()
 
 
 def download(client_socket, file_name, cwd):
@@ -77,7 +92,8 @@ def client_program():
     client_socket.connect((host, port))  # connect to the server
 	
     message = ""
-    cwd = 1
+    cwd = "home"
+    print(os.getcwd())
     while True:
         message = input("[user]$ ")
         if message == 'exit':
@@ -90,12 +106,11 @@ def client_program():
                 cd(client_socket, cwd, args[1])
             case "ls":
                 ls(client_socket, cwd)
+            case "upload":
+                upload(client_socket, args[1], cwd)
             case _:
                 print("Unknown Command")
 
-        client_socket.send(message.encode())
-        data = client_socket.recv(1024).decode()
-        print(data)
 
     client_socket.close()  # close the connection
 
