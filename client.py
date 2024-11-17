@@ -11,8 +11,8 @@ def cd(client_socket, cwd, arg):
 
     # NOTE FROM ANDREW: to do something like cd dir1/dir2, just have it call cd recursively, first on dir1, then dir2, .. etc
     # for absolute option, that can also be converted into recursive relative cd just starting from root
-    # send first packet like: cd {cwd} {newDir} {(a,r,b)}
-    # a: absolute, r: relative, b: backwards
+    # send first packet like: cd {cwd} {newDir} {(r,b)}
+    #r: relative, b: backwards
 
     match det_path:
         # absolute path
@@ -33,13 +33,10 @@ def ls(client_socket, cwd):
     # for i in range(0, len(objects), 4):
     #     print("\t".join(objects[i:i+4]))
 
-    # dirs = cursor.execute("SELECT * FROM directories WHERE parent = ?, (cwd,)")
-    # files = cursor.execute("SELECT * FROM files WHERE dir_id = ?, (cwd,)")
-
     pass
 
 
-def upload(client, filename, cwd):
+def upload(client_socket, filename, cwd):
    
     # Check if the file exists
     if not os.path.isfile(filename):
@@ -47,27 +44,38 @@ def upload(client, filename, cwd):
         return
 
     message = f"upload {filename} {cwd}"
-    client.send(message.encode())
+    client_socket.send(message.encode())
 
-    response = json.loads(client.recv(BUFFER_SIZE).decode())
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     if response["status"] == 400:
         print(response["message"])
-        return
+        if response["data"] != "replace":
+            return
+        
+        # Answer y/n for replacing the file:
+        answer = input()
+        client_socket.send(answer.encode())
+        response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
+        if response["status"] == 400:
+            print(response["message"])
+            return
+
+    # getting here means there was no errors and/or user entered y for replace
 
     print("Uploading file...")
     # Send the file data in chunks
     with open(filename, 'rb') as file:
         while chunk := file.read(BUFFER_SIZE):
-            client.send(chunk)
-    client.send(b'EOF') # signal end of file 
+            client_socket.send(chunk)
+    client_socket.send(b'EOF') # signal end of file 
 
-    response = json.loads(client.recv(BUFFER_SIZE).decode())
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     if response["status"] == 400:
         print(response["message"])
         return
     
     print(response["message"])
-    client.close()
+    client_socket.close()
 
 
 def download(client_socket, file_name, cwd):

@@ -7,6 +7,7 @@ import json
 import os
 
 BUFFER_SIZE = 1024
+TIMEOUT = 15
 print_lock = threading.Lock()
 BASE_DIR = ""
 DB_NAME = "filesystem.db"
@@ -58,14 +59,28 @@ def upload(conn, filename, cwd):
             message = f"Directory: {cwd} does not exist"
             send_response(conn, 400, message)
             return
-        send_response(conn, 200)
+        
+        # Check if files exists
+        answer = ""
+        cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+        if cursor.fetchone():
+            message = f"File: {filename} already exists. Replace it? (y/n)"
+            send_response(conn, 400, message, data="replace")
+            answer = conn.recv(BUFFER_SIZE).decode()
+
+            if answer == "n":
+                message = "OK upload terminated"
+                send_response(conn, 400, message)
+                return
+        
+        send_response(conn, 200) #ACK
     
         print("Receiving file...")
 
         fileData = b""
         while True:
             data = conn.recv(BUFFER_SIZE)
-            if b"EOF" in data:  # End-of-file marker
+            if b"EOF" in data:
                 fileData += data.replace(b"EOF", b"")
                 break
             fileData += data
@@ -74,7 +89,7 @@ def upload(conn, filename, cwd):
 
         type = get_file_type(filename)
         size = len(fileData)
-        cursor.execute("INSERT INTO Files (fileName, fileParent, fileType, fileBytes, fileData) VALUES (?, ?, ?, ?, ?)", (filename, cwd, type, size, fileData))
+        cursor.execute("INSERT OR REPLACE INTO Files (fileName, fileParent, fileType, fileBytes, fileData) VALUES (?, ?, ?, ?, ?)", (filename, cwd, type, size, fileData))
         db.commit()
         db.close()
 
@@ -102,25 +117,53 @@ def cd(conn, cwd, new_dir, type):
         # make sure the dir exists, then return it
         cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
         if not cursor.fetchone():
-            conn.send(f"Directory: {cwd} does not exist")
+            conn.send(f"Directory: {new_dir} does not exist")
             return
-        db.close()
 
-        if new_dir in cursor.fetchall():
+        if new_dir in [dir[0] for dir in cursor.fetchall()]:
             message = f"cd to {new_dir} successful"
             send_response(conn, 200, message, data=new_dir) # data is the actual new dir
 
-    elif type == "a":
-        pass
     elif type == "b":
         cursor.execute("SELECT parent FROM Directories WHERE name = ?", (cwd,))
-        if cursor.fetchall():
+        if cursor.fetchone():
             new_dir = cursor.fetchone()[0]
             message = f"cd to {new_dir} successful"
             send_response(conn, 200, message, new_dir)
-    else:
-        pass
+
+    # other types are clients fault, so should break
+    db.close()
     
+
+def ls(conn, cwd):
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+
+        cursor.execute('''SELECT Directories.name, Files.fileName FROM Directories
+                        JOIN Files ON Directories.parent = Files.fileParent
+                        WHERE Directories.parent = ? AND Files.fileParent = ?''', (cwd, cwd))
+    
+        if not cursor.fetchall():
+            message = f"No files or directories in {cwd}"
+            send_response(conn, 400, message)
+            return
+
+        message = f"Files / directories in {cwd}: "
+        data = [name[0] for name in cursor.fetchall()]
+        send_response(conn, 200, message, data)
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}"
+        send_response(conn, 400, message)
+        print(f"Error accessing the database: {e}")
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}"
+        send_response(conn, 400, message)
+        print(f"Unexpected error: {e}")
+        return
 
 
 def setup_db():
@@ -134,7 +177,6 @@ def setup_db():
     FOREIGN KEY (parent) REFERENCES Directories(name) ON DELETE CASCADE
     );
     ''')
-
 
     cursor.execute('''INSERT OR IGNORE INTO Directories(name, parent) VALUES ("home", "home");''')
 
@@ -200,6 +242,8 @@ def threaded_server(conn):
         match args[0]:
             case "cd":
                 cd(conn, args[1], args[2], args[3]) #cd cwd newdir (a,r,b)
+            case "ls":
+                ls(conn, args[1]) # ls cwd
             case "upload":
                 upload(conn, args[1], args[2]) # upload filename cwd 
             case "quit":
@@ -220,12 +264,13 @@ def run_server():
 
     # look closely. The bind() function takes tuple as argument
     server_socket.bind((host, port))  # bind host address and port together
-
+    
     # configure how many client the server can listen simultaneously
     server_socket.listen(5)
 
     while True:
-        conn, address = server_socket.accept()  # accept new connection
+        conn, address = server_socket.accept() # accept new connection
+        conn.settimeout(TIMEOUT)  
         print("Connection from: " + str(address))
         start_new_thread(threaded_server, (conn,))
 
