@@ -144,8 +144,8 @@ def cd(conn, cwd, new_dir, type):
 
 def ls(conn, cwd):
     try:
-        db_conn = sqlite3.connect(DB_NAME)
-        cursor = db_conn.cursor()
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
 
         cursor.execute('''SELECT Directories.name, Files.fileName FROM Directories
                         JOIN Files ON Directories.parent = Files.fileParent
@@ -176,8 +176,8 @@ def ls(conn, cwd):
 
 def delete(conn, filename, cwd):
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
 
         cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
 
@@ -202,8 +202,8 @@ def delete(conn, filename, cwd):
 
 def mkdir(conn, name, cwd):
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
 
         if not cursor.fetchone():
             message = f"Directory: {cwd} does not exist"
