@@ -5,6 +5,7 @@ import sqlite3
 import json
 import os
 from utils import *
+import pickle
 
 BUFFER_SIZE = 1024
 TIMEOUT = 30
@@ -28,12 +29,13 @@ def download(conn, filename, cwd):
             return
         send_response(conn, 200) # ACK
         
+        file_data = file_data[0]
         # client needs to create file and receive file binary
+        print(len(file_data))
         for i in range(0, len(file_data), BUFFER_SIZE):
-            conn.sendall(file_data[i:i+BUFFER_SIZE])
-        conn.sendall(b"EOF")
+            conn.send(file_data[i:i+BUFFER_SIZE])
+        conn.send(b"EOF")
 
-        send_response(conn, 200, data=file_data[0])
         print(f"Sent file: {filename} to client")
 
     except sqlite3.Error as e:
@@ -142,8 +144,8 @@ def cd(conn, cwd, new_dir, type):
 
 def ls(conn, cwd):
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        db_conn = sqlite3.connect(DB_NAME)
+        cursor = db_conn.cursor()
 
         cursor.execute('''SELECT Directories.name, Files.fileName FROM Directories
                         JOIN Files ON Directories.parent = Files.fileParent
@@ -155,8 +157,11 @@ def ls(conn, cwd):
             return
 
         message = f"Files / directories in {cwd}: "
-        data = [name[0] for name in cursor.fetchall()]
-        send_response(conn, 200, message, data)
+        send_response(conn, 200, message)
+        objects = [name[0] for name in cursor.fetchall()] # BUG: This array is empty
+        # pickle serializes array for transmission
+        data = pickle.dumps(objects)
+        conn.sendall(data)
 
     except sqlite3.Error as e:
         message = f"Database error: {e}"
