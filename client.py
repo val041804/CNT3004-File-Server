@@ -119,26 +119,25 @@ def upload(client_socket, path, cwd):
     display_response(response["message"], "success")
 
 
-def cd(client_socket, cwd, arg):
-    # checking for absolute path and relative path
-    det_path = arg[0:3]
+def cd(client_socket, new_dir, cwd):
+    # Move backwards or forwards
+    if new_dir == "../":
+        message = f"cd {cwd} {new_dir} b"
+    else:
+        message = f"cd {cwd} {new_dir} r"
+    
+    # Request server
+    client_socket.send(message.encode())
 
-    # NOTE FROM ANDREW: to do something like cd dir1/dir2, just have it call cd recursively, first on dir1, then dir2, .. etc
-    # for absolute option, that can also be converted into recursive relative cd just starting from root
-    # send first packet like: cd {cwd} {newDir} {(r,b)}
-    #r: relative, b: backwards
-
-    match det_path:
-        # absolute path
-        case det_path if fnmatch.fnmatch(det_path, "/*"):
-            #check if abs path exists, then return the path
-            display_response("Changing to absolute path...", "info")
-        case det_path if fnmatch.fnmatch(det_path, "./*"):
-            #check if cwd + rel path exists, return whole path
-            display_response("Changing to relative path...", "info")
-        case det_path if fnmatch.fnmatch(det_path, "../*"):
-            # go backwards
-            display_response("Going backwards in the directory structure...", "info")
+    # Wait for response
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
+    match(response["message"]):
+        case 400:
+            display_response(response["message"], response["type"])
+            return
+        case 200:
+            cwd = response["data"]
+    
 
 
 def ls(client_socket, cwd):
