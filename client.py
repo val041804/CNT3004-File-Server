@@ -40,7 +40,7 @@ def download(client_socket, file_name, cwd):
                 if b"EOF" in data:
                     file_data += data.replace(b"EOF", b"")
                     break
-            file_data += data
+                file_data += data
     
     if file_data is None:
         print("Error downloading, try again.")

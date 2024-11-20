@@ -53,8 +53,8 @@ def upload(conn, filename, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
         cursor.execute("SELECT name FROM Directories WHERE name = ?", (cwd,))
-
-        if not cursor.fetchone():
+        result = cursor.fetchone()
+        if not result:
             message = f"Directory: {cwd} does not exist"
             send_response(conn, 400, message)
             return
@@ -62,7 +62,7 @@ def upload(conn, filename, cwd):
         # Check if files exists
         answer = ""
         cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
-        if cursor.fetchone():
+        if result:
             message = f"File: {filename} already exists. Replace it? (y/n)"
             send_response(conn, 400, message, data="replace")
             answer = conn.recv(BUFFER_SIZE).decode().strip().lower()
@@ -118,22 +118,24 @@ def upload(conn, filename, cwd):
 def cd(conn, cwd, new_dir, type):
     db = sqlite3.connect(DB_NAME)
     cursor = db.cursor()
-
     if type == "r":
         # make sure the dir exists, then return it
         cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
-        if not cursor.fetchone():
+        result = cursor.fetchone()
+        if not result:
             conn.send(f"Directory: {new_dir} does not exist")
             return
 
+        cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,)) #written again bc fetch removes from the list of selected items
         if new_dir in [dir[0] for dir in cursor.fetchall()]:
             message = f"cd to {new_dir} successful"
             send_response(conn, 200, message, data=new_dir) # data is the actual new dir
 
     elif type == "b":
         cursor.execute("SELECT parent FROM Directories WHERE name = ?", (cwd,))
-        if cursor.fetchone():
-            new_dir = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        if result:
+            new_dir = result[0]
             message = f"cd to {new_dir} successful"
             send_response(conn, 200, message, new_dir)
 
@@ -150,14 +152,16 @@ def ls(conn, cwd):
                         JOIN Files ON Directories.parent = Files.fileParent
                         WHERE Directories.parent = ? AND Files.fileParent = ?''', (cwd, cwd))
     
-        if not cursor.fetchall():
+        result = cursor.fetchall()
+        if not result:
             message = f"No files or directories in {cwd}"
             send_response(conn, 400, message)
             return
 
         message = f"Files / directories in {cwd}: "
         send_response(conn, 200, message)
-        objects = [name[0] for name in cursor.fetchall()] # BUG: This array is empty
+        objects = [name[0] for name in result]
+        print(objects) # BUG: This array is empty
         # pickle serializes array for transmission
         data = pickle.dumps(objects)
         conn.sendall(data)
