@@ -184,7 +184,7 @@ def ls(conn, cwd):
         return
 
 
-def delete(conn, filename, cwd):
+def rm(conn, filename, cwd):
     try:
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
@@ -238,7 +238,39 @@ def mkdir(conn, name, cwd):
         send_response(conn, 400, message)
         db.close()
         return
-    
+
+
+def rmdir(conn, name, cwd):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
+
+        cursor.execute("SELECT name FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+
+        if not cursor.fetchone():
+            message = f"Directory: {name} does not exist in this directory"
+            send_response(conn, 400, message)
+            db.close()
+            return
+
+        cursor.execute("DELETE FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+        db.commit()
+        db.close()
+        message = f"Directory: {name} deleted"
+        send_response(conn, 200, message)
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}"
+        send_response(conn, 400, message)
+        db.close()
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}"
+        send_response(conn, 400, message)
+        db.close()
+        return    
+
 
 def threaded_server(conn):
     while True:
@@ -259,10 +291,12 @@ def threaded_server(conn):
                 upload(conn, args[1], args[2]) # upload filename cwd 
             case "download":
                 download(conn, args[1], args[2]) # download filename cwd
-            case "delete":
-                delete(conn, args[1], args[2]) # delete filename cwd
+            case "rm":
+                rm(conn, args[1], args[2]) # delete filename cwd
             case "mkdir":
                 mkdir(conn, args[1], args[2]) # mkdir name cwd
+            case "rmdir":
+                rmdir(conn, args[1], args[2])
             case "quit":
                 break
         #send_response(....?)

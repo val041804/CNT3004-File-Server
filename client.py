@@ -91,6 +91,7 @@ def upload(client_socket, path, cwd):
     
     print(response["message"])
 
+
 def cd(client_socket, cwd, arg):
     # checking for absolute path and relative path
     det_path = arg[0:3]
@@ -128,13 +129,21 @@ def ls(client_socket, cwd):
             print(response["message"])
             data = client_socket.recv(BUFFER_SIZE)
             objects = pickle.loads(data)
-            for i in range(0, len(objects), 4):
-                print("\t".join(objects[i:i+4]))
+            for i in range(0, len(objects)):
+                if objects[i] == cwd:
+                    continue;
+                if i % 6 == 0 and i != 0:
+                    print("\r")
+                if '.' not in objects[i]:
+                    print(f"\033[92m{objects[i]}\033[0m", end="\t")
+                else:
+                    print(f"{objects[i]}", end="\t")
+            print("\r")
 
 
-def delete(client_socket, file_name, cwd):
+def rm(client_socket, file_name, cwd):
     # Request server to delete a file
-    message = f"delete {file_name} {cwd}"
+    message = f"rm {file_name} {cwd}"
     client_socket.send(message.encode())
 
     # Wait for response
@@ -164,6 +173,22 @@ def mkdir(client_socket, name, cwd):
             return
 
 
+def rmdir(client_socket, name, cwd):
+    # Request server to delete folder
+    message = f"rmdir {name} {cwd}"
+    client_socket.send(message.encode())
+
+    # Wait for response
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
+    match(response["status"]):
+        case 400:
+            print(response["message"])
+            return
+        case 200:
+            print(response["message"])
+            return
+
+
 def client_program():
     host = socket.gethostname()  # as both code is running on same pc
     port = 5000  # socket server port number
@@ -175,7 +200,7 @@ def client_program():
     cwd = "home"
     print(os.getcwd())
     while True:
-        message = input("[user]$ ")
+        message = input(f"[user \033[92m{cwd}\033[0m]$ ")
         if message == 'exit':
             break
 
@@ -190,10 +215,12 @@ def client_program():
                 upload(client_socket, args[1], cwd)
             case "download":
                 download(client_socket, args[1], cwd)
-            case "delete":
-                delete(client_socket, args[1], cwd)
+            case "rm":
+                rm(client_socket, args[1], cwd)
             case "mkdir":
                 mkdir(client_socket, args[1], cwd)
+            case "rmdir":
+                rmdir(client_socket, args[1], cwd)
             case _:
                 print("Unknown Command")
 
