@@ -48,7 +48,7 @@ def download(conn, filename, cwd):
         return
 
 
-def upload(conn, filename, cwd):
+def upload(conn, filename, cwd): #BUG: Huge zip upload breaks this
     try:
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
@@ -163,9 +163,7 @@ def ls(conn, cwd):
             send_response(conn, 400, message)
             return
 
-        message = f"Files / directories in {cwd}: "
-
-        send_response(conn, 200, message)
+        send_response(conn, 200)
         objects = [name[0] for name in dirs]
         objects += [name[0] for name in files] 
 
