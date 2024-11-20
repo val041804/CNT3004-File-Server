@@ -187,7 +187,7 @@ def delete(conn, filename, cwd):
             db.close()
             return
 
-        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd)) # BUG: Nothing is being deleted
+        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
         db.commit()
         db.close()
         message = f"File: {filename} deleted"
