@@ -76,5 +76,6 @@ def send_response(conn, status, message = None, data = None):
         "data": data
     }
 
-    print(message)
+    if message:
+        print(message)
     conn.send(json.dumps(response).encode())

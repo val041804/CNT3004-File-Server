@@ -31,7 +31,6 @@ def download(conn, filename, cwd):
         
         file_data = file_data[0]
         # client needs to create file and receive file binary
-        print(len(file_data))
         for i in range(0, len(file_data), BUFFER_SIZE):
             conn.send(file_data[i:i+BUFFER_SIZE])
         conn.send(b"EOF")
