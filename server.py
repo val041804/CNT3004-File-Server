@@ -294,7 +294,7 @@ def threaded_server(conn):
             case "mkdir":
                 mkdir(conn, args[1], args[2]) # mkdir name cwd
             case "rmdir":
-                rmdir(conn, args[1], args[2])
+                rmdir(conn, args[1], args[2]) #rmdir name cwd
             case "quit":
                 break
         #send_response(....?)
