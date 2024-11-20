@@ -148,22 +148,29 @@ def ls(conn, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
 
-        cursor.execute('''SELECT Directories.name, Files.fileName FROM Directories
-                        JOIN Files ON Directories.parent = Files.fileParent
-                        WHERE Directories.parent = ? AND Files.fileParent = ?''', (cwd, cwd))
-    
-        result = cursor.fetchall()
-        if not result:
+        cursor.execute('''SELECT DISTINCT name
+                          FROM Directories
+                          WHERE Directories.parent = ?''', (cwd,))
+        dirs = cursor.fetchall()
+
+        cursor.execute('''SELECT DISTINCT fileName
+                          FROM Files
+                          WHERE Files.fileParent = ?''', (cwd,))
+        files = cursor.fetchall()
+
+        if not dirs and not files:
             message = f"No files or directories in {cwd}"
             send_response(conn, 400, message)
             return
 
         message = f"Files / directories in {cwd}: "
+
         send_response(conn, 200, message)
-        objects = [name[0] for name in result]
-        print(objects) # BUG: This array is empty
+        objects = [name[0] for name in dirs]
+        objects += [name[0] for name in files] 
+
         # pickle serializes array for transmission
-        data = pickle.dumps(objects)
+        data = pickle.dumps(objects) #TODO should send two seperate data dumps for files vs dirs for color coding
         conn.sendall(data)
 
     except sqlite3.Error as e:
