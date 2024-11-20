@@ -26,7 +26,7 @@ def display_response(message, type):
     icons = {
         "success": "✅ SUCCESS",
         "error": "❌ ERROR",
-        "warning": "⚠️ WARNING",
+        "warning": "⚠️  WARNING",
         "info": "🔍 INFO"
     }
 
@@ -35,7 +35,6 @@ def display_response(message, type):
         bar_length = 50  
         wrapped_message = textwrap.fill(message, width=bar_length-4)  # Subtract 4 to account for the padding
         
-        print()
         print("═" * bar_length)
         print(f" {icons[type]}")
         print("═" * bar_length)
@@ -45,7 +44,6 @@ def display_response(message, type):
         
         print("═" * bar_length)
         print()
-
 
 def download(client_socket, file_name, cwd):
 
@@ -92,7 +90,7 @@ def upload(client_socket, path, cwd):
 
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     if response["status"] == 400:
-        display_response(response["message"], "error")
+        display_response(response["message"], response["type"])
         if response["data"] != "replace":
             return
         
@@ -101,7 +99,7 @@ def upload(client_socket, path, cwd):
         client_socket.send(answer.encode())
         response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
         if response["status"] == 400:
-            display_response(response["message"], "error")
+            display_response(response["message"], response["type"])
             return
 
     # getting here means there was no errors and/or user entered y for replace
