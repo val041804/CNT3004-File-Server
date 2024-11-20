@@ -12,7 +12,7 @@ This system facilitates file management between a client and a server using a so
 ### **1. `cd` (Change Directory)**
 Changes the current working directory (CWD) of the client.
 - **Usage**: `cd <path>`
-  - Relative path (`subdir`)
+  - Relative path (`./subdir`)
   - Parent directory (`../`)
 - **Parameters**:
   - `client_socket`: The client’s socket connection.
