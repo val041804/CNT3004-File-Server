@@ -3,6 +3,7 @@ import fnmatch
 import os
 import json
 import pickle
+import textwrap
 
 BUFFER_SIZE = 1024
 TIMEOUT = None
@@ -21,6 +22,31 @@ def get_download_path():
         return os.path.join(os.path.expanduser('~'), 'Downloads')
 
 
+def display_response(message, type):
+    icons = {
+        "success": "✅ SUCCESS",
+        "error": "❌ ERROR",
+        "warning": "⚠️ WARNING",
+        "info": "🔍 INFO"
+    }
+
+    if type and message:
+        print()
+        bar_length = 50  
+        wrapped_message = textwrap.fill(message, width=bar_length-4)  # Subtract 4 to account for the padding
+        
+        print()
+        print("═" * bar_length)
+        print(f" {icons[type]}")
+        print("═" * bar_length)
+        
+        for line in wrapped_message.split("\n"):
+            print(f" {line}")
+        
+        print("═" * bar_length)
+        print()
+
+
 def download(client_socket, file_name, cwd):
 
     # Request server to send_file
@@ -31,7 +57,7 @@ def download(client_socket, file_name, cwd):
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     match(response["status"]):
         case 400:
-            print(response["message"])
+            display_response(response["message"], response["type"])
             return
         case 200:
             file_data = b""
@@ -43,11 +69,14 @@ def download(client_socket, file_name, cwd):
                 file_data += data
     
     if file_data is None:
-        print("Error downloading, try again.")
+        message = "Error downloading, try again."
+        display_response(message, "error")
         return
     
     with open(f"{get_download_path()}/{file_name}", "wb") as file:
         file.write(file_data)
+
+    display_response("File downloaded.", "success")
 
 
 def upload(client_socket, path, cwd):
@@ -55,7 +84,7 @@ def upload(client_socket, path, cwd):
     filename = path.split("/")[-1]
     # Check if the file exists
     if not os.path.isfile(path):
-        print(f"File '{filename}' does not exist.")
+        display_response(f"File '{filename}' does not exist.", "error")
         return
     
     message = f"upload {filename} {cwd}"
@@ -63,21 +92,21 @@ def upload(client_socket, path, cwd):
 
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     if response["status"] == 400:
-        print(response["message"])
+        display_response(response["message"], "error")
         if response["data"] != "replace":
             return
         
         # Answer y/n for replacing the file:
-        answer = input()
+        answer = input("Do you want to replace the file? (y/n): ")
         client_socket.send(answer.encode())
         response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
         if response["status"] == 400:
-            print(response["message"])
+            display_response(response["message"], "error")
             return
 
     # getting here means there was no errors and/or user entered y for replace
 
-    print("Uploading file...")
+    display_response("Uploading file...", "info")
     # Send the file data in chunks
     with open(path, 'rb') as file:
         while chunk := file.read(BUFFER_SIZE):
@@ -86,10 +115,10 @@ def upload(client_socket, path, cwd):
 
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     if response["status"] == 400:
-        print(response["message"])
+        display_response(response["message"], "error")
         return
     
-    print(response["message"])
+    display_response(response["message"], "success")
 
 
 def cd(client_socket, cwd, arg):
@@ -105,13 +134,13 @@ def cd(client_socket, cwd, arg):
         # absolute path
         case det_path if fnmatch.fnmatch(det_path, "/*"):
             #check if abs path exists, then return the path
-            print("absolute path")
+            display_response("Changing to absolute path...", "info")
         case det_path if fnmatch.fnmatch(det_path, "./*"):
             #check if cwd + rel path exists, return whole path
-            print("relative path")
+            display_response("Changing to relative path...", "info")
         case det_path if fnmatch.fnmatch(det_path, "../*"):
             # go backwards
-            print("backwards")
+            display_response("Going backwards in the directory structure...", "info")
 
 
 def ls(client_socket, cwd):
@@ -126,12 +155,11 @@ def ls(client_socket, cwd):
             print(response["message"])
             return
         case 200:
-            print(response["message"])
             data = client_socket.recv(BUFFER_SIZE)
             objects = pickle.loads(data)
             for i in range(0, len(objects)):
                 if objects[i] == cwd:
-                    continue;
+                    continue
                 if i % 6 == 0 and i != 0:
                     print("\r")
                 if '.' not in objects[i]:
@@ -139,6 +167,8 @@ def ls(client_socket, cwd):
                 else:
                     print(f"{objects[i]}", end="\t")
             print("\r")
+
+
 
 
 def rm(client_socket, file_name, cwd):
@@ -150,10 +180,10 @@ def rm(client_socket, file_name, cwd):
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     match(response["status"]):
         case 400:
-            print(response["message"])
+            display_response(response["message"], "error")
             return
         case 200:
-            print(response["message"])
+            display_response(response["message"], "success")
             return
 
 
@@ -166,10 +196,10 @@ def mkdir(client_socket, name, cwd):
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     match(response["status"]):
         case 400:
-            print(response["message"])
+            display_response(response["message"], "error")
             return
         case 200:
-            print(response["message"])
+            display_response(response["message"], "success")
             return
 
 
@@ -182,10 +212,10 @@ def rmdir(client_socket, name, cwd):
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     match(response["status"]):
         case 400:
-            print(response["message"])
+            display_response(response["message"], "error")
             return
         case 200:
-            print(response["message"])
+            display_response(response["message"], "success")
             return
 
 
@@ -207,7 +237,6 @@ def client_program():
         args = message.split(" ", 2)
         match args[0]:
             case "cd":
-                #cwd = cd(client_socket, cwd, args[1])
                 cd(client_socket, cwd, args[1])
             case "ls":
                 ls(client_socket, cwd)
@@ -222,7 +251,7 @@ def client_program():
             case "rmdir":
                 rmdir(client_socket, args[1], cwd)
             case _:
-                print("Unknown Command")
+                display_response("Unknown Command", "error")
 
 
     client_socket.close()  # close the connection
@@ -230,3 +259,4 @@ def client_program():
 
 if __name__ == '__main__':
     client_program()
+

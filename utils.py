@@ -69,13 +69,15 @@ def get_max_size(type):
             return 1
         
 
-def send_response(conn, status, message = None, data = None):
+def send_response(conn, status, message = None, data = None, type = None):
     response = {
         "status": status,
         "message": message,
-        "data": data
+        "data": data,
+        "type": type,
     }
 
     if message:
         print(message)
+
     conn.send(json.dumps(response).encode())
