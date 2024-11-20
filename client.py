@@ -5,6 +5,7 @@ import json
 import pickle
 
 BUFFER_SIZE = 1024
+TIMEOUT = None
 
 # https://stackoverflow.com/a/48706260
 def get_download_path():
@@ -132,19 +133,35 @@ def ls(client_socket, cwd):
 
 
 def delete(client_socket, file_name, cwd):
+    # Request server to delete a file
+    message = f"delete {file_name} {cwd}"
+    client_socket.send(message.encode())
 
-    # cursor.execute("DELETE FROM files WHERE name = ? AND dir_id = ?", (file_name, cwd))
-    # conn.commit()
+    # Wait for response
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
+    match(response["status"]):
+        case 400:
+            print(response["message"])
+            return
+        case 200:
+            print(response["message"])
+            return
 
-    # if cursor.rowcount > 0:
-    #     print(f"File '{file_name}' deleted from directory ID {cwd}.")
-    # else:
-    #     print("File does not exist in the specified directory.")
-    pass
 
+def mkdir(client_socket, name, cwd):
+    # Request server to make a directory
+    message = f"mkdir {name} {cwd}"
+    client_socket.send(message.encode())
 
-def mkdir():
-    pass
+    # Wait for response
+    response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
+    match(response["status"]):
+        case 400:
+            print(response["message"])
+            return
+        case 200:
+            print(response["message"])
+            return
 
 
 def client_program():
@@ -153,7 +170,7 @@ def client_program():
 
     client_socket = socket.socket()  # instantiate
     client_socket.connect((host, port))  # connect to the server
-	
+    client_socket.settimeout(TIMEOUT)
     message = ""
     cwd = "home"
     print(os.getcwd())
@@ -173,6 +190,10 @@ def client_program():
                 upload(client_socket, args[1], cwd)
             case "download":
                 download(client_socket, args[1], cwd)
+            case "delete":
+                delete(client_socket, args[1], cwd)
+            case "mkdir":
+                mkdir(client_socket, args[1], cwd)
             case _:
                 print("Unknown Command")
 

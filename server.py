@@ -8,7 +8,7 @@ from utils import *
 import pickle
 
 BUFFER_SIZE = 1024
-TIMEOUT = 30
+TIMEOUT = None
 print_lock = threading.Lock()
 BASE_DIR = ""
 DB_NAME = "filesystem.db"
@@ -184,19 +184,25 @@ def delete(conn, filename, cwd):
         if not cursor.fetchone():
             message = f"File: {filename} does not exist in this directory"
             send_response(conn, 400, message)
+            db.close()
+            return
 
-        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd)) # BUG: Nothing is being deleted
+        db.commit()
+        db.close()
         message = f"File: {filename} deleted"
         send_response(conn, 200, message)
 
     except sqlite3.Error as e:
         message = f"Database error: {e}"
         send_response(conn, 400, message)
+        db.close()
         return
 
     except Exception as e:
         message = f"Unexpected error: {e}"
         send_response(conn, 400, message)
+        db.close()
         return
 
 
@@ -205,23 +211,22 @@ def mkdir(conn, name, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
 
-        if not cursor.fetchone():
-            message = f"Directory: {cwd} does not exist"
-            send_response(conn, 400, message)
-            return
-        
         cursor.execute("INSERT INTO Directories(name, parent) VALUES(?, ?)", (name, cwd))
+        db.commit()
+        db.close()
         message = f"Successfully created directory: {name}"
         send_response(conn, 200, message)
 
     except sqlite3.Error as e:
         message = f"Database error: {e}"
         send_response(conn, 400, message)
+        db.close()
         return
 
     except Exception as e:
         message = f"Unexpected error: {e}"
         send_response(conn, 400, message)
+        db.close()
         return
     
 
