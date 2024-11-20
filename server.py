@@ -62,7 +62,7 @@ def upload(conn, filename, cwd):
         # Check if files exists
         answer = ""
         cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
-        if result:
+        if cursor.fetchall():
             message = f"File: {filename} already exists. Replace it? (y/n)"
             send_response(conn, 400, message, data="replace")
             answer = conn.recv(BUFFER_SIZE).decode().strip().lower()

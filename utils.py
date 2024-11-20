@@ -39,7 +39,7 @@ def get_file_type(filename):
 
     audio = ["mp3", "wav"]
     text = ["txt", "cpp", "py", "md"]
-    image = [".jpg", "png"]
+    image = [".jpg", "png", ".pdf"]
     video = ["mp4", "avi"]
 
     if extension in audio:
