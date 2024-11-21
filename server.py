@@ -1,14 +1,15 @@
 import socket
 from _thread import *
 import threading
-import fnmatch
 import sqlite3
 import json
 import os
+from utils import *
+import pickle
 
 BUFFER_SIZE = 1024
+TIMEOUT = None
 print_lock = threading.Lock()
-BASE_DIR = ""
 DB_NAME = "filesystem.db"
 
 
@@ -21,26 +22,32 @@ def download(conn, filename, cwd):
         file_data = cursor.fetchone()
         cursor.close()
 
-        print(file_data)
         if file_data is None or file_data[0] is None:
-            message = f"File: {filename} is not found"
-            send_response(conn, 400, message)
+            message = f"File: {filename} is not found."
+            send_response(conn, 400, message, type="error")
             return
+        send_response(conn, 200) # ACK
+        
+        file_data = file_data[0]
+        # client needs to create file and receive file binary
+        for i in range(0, len(file_data), BUFFER_SIZE):
+            conn.send(file_data[i:i+BUFFER_SIZE])
+        conn.send(b"EOF")
 
-        send_response(conn, 200, data=file_data[0])
-        print(f"Sent file: {filename} to client")
+        print(f"Sent file: {filename} to client.")
 
     except sqlite3.Error as e:
-        message = f"Database error: {e}"
-        send_response(conn, 400, message)
-        print(f"Error accessing the database: {e}")
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
         return
 
     except Exception as e:
-        message = f"Unexpected error: {e}"
-        send_response(conn, 400, message)
-        print(f"Unexpected error: {e}")
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
         return
+    
+    finally:
+        db.close()
 
 
 def upload(conn, filename, cwd):
@@ -48,134 +55,239 @@ def upload(conn, filename, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
         cursor.execute("SELECT name FROM Directories WHERE name = ?", (cwd,))
-
-        if not cursor.fetchone():
-            message = f"Directory: {cwd} does not exist"
-            send_response(conn, 400, message)
+        result = cursor.fetchone()
+        if not result:
+            message = f"Directory: {cwd} does not exist."
+            send_response(conn, 400, message, type="error")
             return
-        send_response(conn, 200)
+        
+        # Check if files exists
+        answer = ""
+        cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+        if cursor.fetchall():
+            message = f"File: {filename} already exists. Replace it? (y/n)."
+            send_response(conn, 400, message, data="replace", type="warning")
+            answer = conn.recv(BUFFER_SIZE).decode().strip().lower()
+
+            if answer != "y":
+                message = "Upload terminated."
+                send_response(conn, 400, message, type="info")
+                return
+        
+        send_response(conn, 200) #ACK
     
         print("Receiving file...")
 
         fileData = b""
         while True:
             data = conn.recv(BUFFER_SIZE)
-            if b"EOF" in data:  # End-of-file marker
+            if b"EOF" in data:
                 fileData += data.replace(b"EOF", b"")
                 break
             fileData += data
 
-        # with open(f"f_{filename}", 'wb') as file:
-        #     while True:
-        #         data = conn.recv(BUFFER_SIZE)
-        #         if b'EOF' in data:  # Check for the end marker
-        #             file.write(data.replace(b'EOF', b''))  # Remove the marker
-        #             break
-        #         file.write(data)
-
         print(f"File: '{filename}' received")
 
-        # with open(f"f_{filename}", 'rb') as f:
-        #     data = f.read()
-
         type = get_file_type(filename)
-        size = len(fileData)
-        cursor.execute("INSERT INTO Files (fileName, fileParent, fileType, fileBytes, fileData) VALUES (?, ?, ?, ?, ?)", (filename, cwd, type, size, fileData))
-        db.commit()
-        db.close()
+        gb = len(fileData) / 1000000000
+        max_size = get_max_size(type)
+        if gb > max_size:
+            message = f"File type: {type} cannot be greater than {max_size} GB."
+            send_response(conn, 400, message, type="error")
+            return
 
-        message = f"File: {filename} sucessfully uploaded"
-        send_response(conn, 200, message)
+        size = len(fileData)
+        cursor.execute("INSERT OR REPLACE INTO Files (fileName, fileParent, fileType, fileBytes, fileData) VALUES (?, ?, ?, ?, ?)", (filename, cwd, type, size, fileData))
+        db.commit()
+
+        message = f"File: {filename} sucessfully uploaded."
+        send_response(conn, 200, message, type="success")
 
     except sqlite3.Error as e:
-        message = f"Database error: {e}"
-        send_response(conn, 400, message)
-        print(f"Error accessing the database: {e}")
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
         return
 
     except Exception as e:
-        message = f"Unexpected error: {e}"
-        send_response(conn, 400, message)
-        print(f"Unexpected error: {e}")
-        return
-
-
-def cd(conn, cwd, new_dir):
-    db = sqlite3.connect(DB_NAME)
-    cursor = db.cursor()
-
-    # make sure the dir exists, then return it
-    cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
-    if not cursor.fetchone():
-        conn.send(f"Directory: {cwd} does not exist")
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
         return
     
-    if new_dir in cursor.fetchall():
-        conn.send(new_dir)
-        conn.send(f"cd sucessful to: {new_dir}")
+    finally:
+        db.close()
 
 
-def setup_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS Directories (
-    name TEXT NOT NULL,
-    parent TEXT NOT NULL,
-    PRIMARY KEY (name, parent)
-    FOREIGN KEY (parent) REFERENCES Directories(name) ON DELETE CASCADE
-    );
-    ''')
+def cd(conn, cwd, new_dir, type):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
+        if type == "r":
+            # make sure the dir exists, then return it
+            cursor.execute("SELECT name FROM Directories WHERE name = ?", (new_dir,))
+            result = cursor.fetchone()
+            if not result:
+                message = f"Directory {new_dir} does not exist."
+                send_response(conn, 400, message, type="error")
+                return
 
-    cursor.execute('''INSERT OR IGNORE INTO Directories(name, parent) VALUES ("home", "home");''')
+            cursor.execute("SELECT name FROM Directories WHERE name = ?", (new_dir,)) #written again bc fetch removes from the list of selected items
+            if new_dir in [dir[0] for dir in cursor.fetchall()]:
+                message = f"cd to {new_dir} successful."
+                send_response(conn, 200, message, new_dir, type="success") # data is the actual new dir
 
-    cursor.execute('''SELECT * FROM Files WHERE fileParent = "home";''')
-    print(cursor.fetchall())
+        elif type == "b":
+            cursor.execute("SELECT parent FROM Directories WHERE name = ?", (cwd,))
+            result = cursor.fetchone()
+            if result:
+                new_dir = result[0]
+                message = f"cd to {new_dir} successful."
+                send_response(conn, 200, message, new_dir, type="success")
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS Files (
-    fileName TEXT NOT NULL,
-    fileParent TEXT NOT NULL,
-    fileType TEXT NOT NULL,
-    fileBytes FLOAT NOT NULL,
-    fileData BLOB NOT NULL,
-    PRIMARY KEY (fileName, fileParent)
-    FOREIGN KEY (fileParent) REFERENCES Directories(name) ON DELETE CASCADE
-    );
-    ''')
+    except sqlite3.Error as e:
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
 
-    conn.commit()
-    conn.close()
-
-
-def get_file_type(filename):
-    extension = filename.split('.', 1)[1]
-
-    audio = ["mp3", "wav"]
-    text = ["txt", "cpp", "py", "md"]
-    image = [".jpg", "png"]
-    video = ["mp4", "avi"]
-
-    if extension in audio:
-        return "audio"
-    elif extension in text:
-        return "text"
-    elif extension in image:
-        return "image"
-    elif extension in video:
-        return "video"
-    else:
-        return "unknown"
+    except Exception as e:
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+    
+    finally:
+        db.close()
     
 
-def send_response(conn, status, message = None, data = None):
-    response = {
-        "status": status,
-        "message": message,
-        "data": data
-    }
+def ls(conn, cwd):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
 
-    conn.send(json.dumps(response).encode())
+        cursor.execute('''SELECT DISTINCT name
+                          FROM Directories
+                          WHERE Directories.parent = ?''', (cwd,))
+        dirs = cursor.fetchall()
+
+        cursor.execute('''SELECT DISTINCT fileName
+                          FROM Files
+                          WHERE Files.fileParent = ?''', (cwd,))
+        files = cursor.fetchall()
+
+        if not dirs and not files:
+            message = f"No files or directories in {cwd}."
+            send_response(conn, 400, message, type="error")
+            return
+
+        send_response(conn, 200)
+        objects = [name[0] for name in dirs]
+        objects += [name[0] for name in files] 
+
+        data = pickle.dumps(objects)
+        conn.sendall(data)
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+    
+    finally:
+        db.close()
+
+def rm(conn, filename, cwd):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
+
+        cursor.execute("SELECT fileName FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+
+        if not cursor.fetchone():
+            message = f"File: {filename} does not exist in this directory."
+            send_response(conn, 400, message, type="error")
+            return
+
+        cursor.execute("DELETE FROM Files WHERE fileName = ? AND fileParent = ?", (filename, cwd))
+        db.commit()
+        message = f"File: {filename} deleted."
+        send_response(conn, 200, message, type="success")
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+    
+    finally:
+        db.close()
+
+
+def mkdir(conn, name, cwd):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
+
+        cursor.execute("SELECT name, parent FROM Directories WHERE name = ?", (name, ))
+
+        result = cursor.fetchone()
+        if result and result[0]:
+            message = f"Directory: {name} already exists in the directory: ({result[1]})"
+            send_response(conn, 400, message, type="error")
+            return 
+
+        cursor.execute("INSERT INTO Directories(name, parent) VALUES(?, ?)", (name, cwd))
+        db.commit()
+        message = f"Successfully created directory: {name}."
+        send_response(conn, 200, message, type="success")
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+
+    finally:
+        db.close()
+
+def rmdir(conn, name, cwd):
+    try:
+        db = sqlite3.connect(DB_NAME)
+        cursor = db.cursor()
+
+        cursor.execute("SELECT name FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+
+        if not cursor.fetchone():
+            message = f"Directory: {name} does not exist in this directory."
+            send_response(conn, 400, message, type="error")
+            return
+
+        cursor.execute("DELETE FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+        db.commit()
+        message = f"Directory: {name} deleted."
+        send_response(conn, 200, message, type="success")
+
+    except sqlite3.Error as e:
+        message = f"Database error: {e}."
+        send_response(conn, 400, message, type="error")
+        return
+
+    except Exception as e:
+        message = f"Unexpected error: {e}."
+        send_response(conn, 400, message, type="error")
+        return    
+    
+    finally:
+        db.close()
 
 
 def threaded_server(conn):
@@ -190,12 +302,21 @@ def threaded_server(conn):
 
         match args[0]:
             case "cd":
-                cd(conn, args[1], args[2]) #cd cwd newdir
+                cd(conn, args[1], args[2], args[3]) # cd cwd newdir (a,r,b)
+            case "ls":
+                ls(conn, args[1]) # ls cwd
             case "upload":
-                upload(conn, args[1], args[2]) # upload filename cwd
+                upload(conn, args[1], args[2]) # upload filename cwd 
+            case "download":
+                download(conn, args[1], args[2]) # download filename cwd
+            case "rm":
+                rm(conn, args[1], args[2]) # delete filename cwd
+            case "mkdir":
+                mkdir(conn, args[1], args[2]) # mkdir name cwd
+            case "rmdir":
+                rmdir(conn, args[1], args[2]) # rmdir name cwd
             case "quit":
                 break
-        #send_response(....?)
 
     conn.close()  # close the connection
 
@@ -204,19 +325,20 @@ def run_server():
     # get the hostname
     host = socket.gethostname()
     port = 5000  # initiate port no above 1024
-    setup_db()
+    setup_db(DB_NAME)
 
 
     server_socket = socket.socket() 
 
     # look closely. The bind() function takes tuple as argument
     server_socket.bind((host, port))  # bind host address and port together
-
+    
     # configure how many client the server can listen simultaneously
     server_socket.listen(5)
 
     while True:
-        conn, address = server_socket.accept()  # accept new connection
+        conn, address = server_socket.accept() # accept new connection
+        conn.settimeout(TIMEOUT)  
         print("Connection from: " + str(address))
         start_new_thread(threaded_server, (conn,))
 
