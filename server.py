@@ -233,10 +233,11 @@ def mkdir(conn, name, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
 
-        cursor.execute("SELECT name FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+        cursor.execute("SELECT name, parent FROM Directories WHERE name = ?", (name, ))
 
-        if cursor.fetchone():
-            message = f"Directory: {name} already exists in the current working directory ({cwd})"
+        result = cursor.fetchone()
+        if result and result[0]:
+            message = f"Directory: {name} already exists in the directory: ({result[1]})"
             send_response(conn, 400, message, type="error")
             return 
 
