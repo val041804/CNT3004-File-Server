@@ -10,7 +10,7 @@ import pickle
 BUFFER_SIZE = 1024
 TIMEOUT = None
 print_lock = threading.Lock()
-DB_NAME = "database.db"
+DB_NAME = "filesystem.db"
 
 
 def download(conn, filename, cwd):
