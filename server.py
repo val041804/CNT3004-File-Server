@@ -10,7 +10,7 @@ import pickle
 BUFFER_SIZE = 1024
 TIMEOUT = None
 print_lock = threading.Lock()
-DB_NAME = "filesystem.db"
+DB_NAME = "database.db"
 
 
 def download(conn, filename, cwd):
@@ -119,17 +119,17 @@ def cd(conn, cwd, new_dir, type):
     cursor = db.cursor()
     if type == "r":
         # make sure the dir exists, then return it
-        cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,))
+        cursor.execute("SELECT name FROM Directories WHERE name = ?", (new_dir,))
         result = cursor.fetchone()
         if not result:
             message = f"Directory {new_dir} does not exist."
             send_response(conn, 400, message, type="error")
             return
 
-        cursor.execute("SELECT name FROM Directories WHERE parent = ?", (cwd,)) #written again bc fetch removes from the list of selected items
+        cursor.execute("SELECT name FROM Directories WHERE name = ?", (new_dir,)) #written again bc fetch removes from the list of selected items
         if new_dir in [dir[0] for dir in cursor.fetchall()]:
             message = f"cd to {new_dir} successful."
-            send_response(conn, 200, message, data=new_dir, type="success") # data is the actual new dir
+            send_response(conn, 200, message, new_dir, type="success") # data is the actual new dir
 
     elif type == "b":
         cursor.execute("SELECT parent FROM Directories WHERE name = ?", (cwd,))

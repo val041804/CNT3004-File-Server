@@ -119,24 +119,25 @@ def upload(client_socket, path, cwd):
     display_response(response["message"], "success")
 
 
-def cd(client_socket, new_dir, cwd):
+def cd(client_socket, cwd, new_dir):
     # Move backwards or forwards
     if new_dir == "../":
-        message = f"cd {cwd} {new_dir} b"
+        message = f"cd {cwd[0]} {new_dir} b"
     else:
-        message = f"cd {cwd} {new_dir} r"
+        message = f"cd {cwd[0]} {new_dir} r"
     
     # Request server
     client_socket.send(message.encode())
 
     # Wait for response
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
-    match(response["message"]):
+    match(response["status"]):
         case 400:
             display_response(response["message"], response["type"])
             return
         case 200:
-            cwd = response["data"]
+            print(response["data"])
+            cwd[0] = response["data"]
     
 
 
@@ -224,10 +225,11 @@ def client_program():
     client_socket.connect((host, port))  # connect to the server
     client_socket.settimeout(TIMEOUT)
     message = ""
-    cwd = "home"
+    cwd = ["home"]
     print(os.getcwd())
     while True:
-        message = input(f"[user \033[92m{cwd}\033[0m]$ ")
+        c_cwd = cwd[0]
+        message = input(f"[user \033[92m{c_cwd}\033[0m]$ ")
         if message == 'exit':
             break
 
@@ -236,17 +238,17 @@ def client_program():
             case "cd":
                 cd(client_socket, cwd, args[1])
             case "ls":
-                ls(client_socket, cwd)
+                ls(client_socket, c_cwd)
             case "upload":
-                upload(client_socket, args[1], cwd)
+                upload(client_socket, args[1], c_cwd)
             case "download":
-                download(client_socket, args[1], cwd)
+                download(client_socket, args[1], c_cwd)
             case "rm":
-                rm(client_socket, args[1], cwd)
+                rm(client_socket, args[1], c_cwd)
             case "mkdir":
-                mkdir(client_socket, args[1], cwd)
+                mkdir(client_socket, args[1], c_cwd)
             case "rmdir":
-                rmdir(client_socket, args[1], cwd)
+                rmdir(client_socket, args[1], c_cwd)
             case _:
                 display_response("Unknown Command", "error")
 
