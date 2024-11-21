@@ -154,16 +154,25 @@ def ls(client_socket, cwd):
         case 200:
             data = client_socket.recv(BUFFER_SIZE)
             objects = pickle.loads(data)
-            for i in range(0, len(objects)):
-                if objects[i] == cwd:
+
+            max_length = max(len(obj) for obj in objects) if objects else 0
+            column_width = max(max_length + 4, 20)
+            columns = 4  # Items per row
+
+            # Format output
+            print()
+            for i, obj in enumerate(objects):
+                if obj == cwd:
                     continue
-                if i % 6 == 0 and i != 0:
-                    print("\r")
-                if '.' not in objects[i]:
-                    print(f"\033[92m{objects[i]}\033[0m", end="\t")
+                if i % columns == 0 and i != 0:
+                    print()
+                
+                if '.' not in obj:
+                    print(f"\033[92m{obj:<{column_width}}\033[0m", end="")
                 else:
-                    print(f"{objects[i]}", end="\t")
-            print("\r")
+                    print(f"{obj:<{column_width}}", end="")
+            print("\n")
+
 
 
 

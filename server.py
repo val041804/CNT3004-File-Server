@@ -47,7 +47,7 @@ def download(conn, filename, cwd):
         return
 
 
-def upload(conn, filename, cwd): #BUG: Huge zip upload breaks this
+def upload(conn, filename, cwd):
     try:
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
