@@ -136,7 +136,6 @@ def cd(client_socket, cwd, new_dir):
             display_response(response["message"], response["type"])
             return
         case 200:
-            print(response["data"])
             cwd[0] = response["data"]
     
 
