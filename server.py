@@ -219,6 +219,14 @@ def mkdir(conn, name, cwd):
         db = sqlite3.connect(DB_NAME)
         cursor = db.cursor()
 
+        cursor.execute("SELECT name FROM Directories WHERE name = ? AND parent = ?", (name, cwd))
+
+        if cursor.fetchone():
+            message = f"Directory: {name} already exists in the current working directory ({cwd})"
+            send_response(conn, 400, message, type="error")
+            db.close()
+            return 
+
         cursor.execute("INSERT INTO Directories(name, parent) VALUES(?, ?)", (name, cwd))
         db.commit()
         db.close()
