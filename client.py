@@ -121,7 +121,7 @@ def upload(client_socket, path, cwd):
 
 def cd(client_socket, cwd, new_dir):
     # Move backwards or forwards
-    if new_dir == "../":
+    if new_dir == "../" or new_dir == "..":
         message = f"cd {cwd[0]} {new_dir} b"
     else:
         message = f"cd {cwd[0]} {new_dir} r"
@@ -150,7 +150,7 @@ def ls(client_socket, cwd):
     response = json.loads(client_socket.recv(BUFFER_SIZE).decode())
     match(response["status"]):
         case 400:
-            print(response["message"])
+            display_response(response["message"], response["type"])
             return
         case 200:
             data = client_socket.recv(BUFFER_SIZE)
