@@ -155,26 +155,18 @@ def ls(client_socket, cwd):
             data = client_socket.recv(BUFFER_SIZE)
             objects = pickle.loads(data)
 
-            max_length = max(len(obj) for obj in objects) if objects else 0
-            column_width = max(max_length + 4, 20)
             columns = 4  # Items per row
-
             # Format output
-            print()
             for i, obj in enumerate(objects):
                 if obj == cwd:
                     continue
                 if i % columns == 0 and i != 0:
                     print()
-                
                 if '.' not in obj:
-                    print(f"\033[92m{obj:<{column_width}}\033[0m", end="")
+                    print(f"\033[92m{obj}\033[0m", end="  ")
                 else:
-                    print(f"{obj:<{column_width}}", end="")
-            print("\n")
-
-
-
+                    print(f"{obj}", end="  ")
+            print("\r")
 
 
 def rm(client_socket, file_name, cwd):
@@ -234,10 +226,9 @@ def client_program():
     client_socket.settimeout(TIMEOUT)
     message = ""
     cwd = ["home"]
-    print(os.getcwd())
     while True:
         c_cwd = cwd[0]
-        message = input(f"[user \033[92m{c_cwd}\033[0m]$ ")
+        message = input(f"[user@{host} \033[92m{c_cwd}\033[0m]$ ")
         if message == 'exit':
             break
 

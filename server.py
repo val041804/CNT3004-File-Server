@@ -237,7 +237,7 @@ def mkdir(conn, name, cwd):
 
         result = cursor.fetchone()
         if result and result[0]:
-            message = f"Directory: {name} already exists in the directory: ({result[1]})"
+            message = f"Directory: \033[92m{name}\033[0m already exists inside of \033[92m{result[1]}\033[0m"
             send_response(conn, 400, message, type="error")
             return 
 
