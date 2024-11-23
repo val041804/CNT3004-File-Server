@@ -79,7 +79,10 @@ def download(client_socket, file_name, cwd):
 
 def upload(client_socket, path, cwd):
     # Get name of file from path
-    filename = path.split("/")[-1]
+    if os.name == 'nt':
+        filename = path.split("\\")[-1]
+    else:
+        filename = path.split("/")[-1]
     # Check if the file exists
     if not os.path.isfile(path):
         display_response(f"File '{filename}' does not exist.", "error")
