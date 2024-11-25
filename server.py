@@ -6,6 +6,8 @@ import json
 import os
 from utils import *
 import pickle
+import psutil
+import time
 
 BUFFER_SIZE = 1024
 TIMEOUT = None
@@ -29,12 +31,34 @@ def download(conn, filename, cwd):
         send_response(conn, 200) # ACK
         
         file_data = file_data[0]
-        # client needs to create file and receive file binary
-        for i in range(0, len(file_data), BUFFER_SIZE):
-            conn.send(file_data[i:i+BUFFER_SIZE])
-        conn.send(b"EOF")
 
-        print(f"Sent file: {filename} to client.")
+        # tracking download speeds
+        def download_speed():
+            # starting timer
+            start_timer = time.time() 
+            try:
+                size = 0
+                for i in range(0, len(file_data), BUFFER_SIZE):
+                    chunk = file_data[i:i + BUFFER_SIZE]
+                    conn.send(chunk)
+                    size += len(chunk)
+
+                conn.send(b"EOF")
+                print(f'Sent file: {filename} to client.')
+
+                # calculating file transfer rate and download speed
+                end_timer = time.time()
+                duration = end_timer - start_timer
+                speed = (size / duration) * 8 / 1e6 # calculated in Mbps
+                # metrics that are printed are: file size, file transfer rate, and download speed
+                print(f'File Sent: {size} bytes in {duration: .2f} secs. Speed: {speed: .2f} Mbps')
+
+            
+            except Exception as e:
+                print(f'Error during download: {e}')
+
+        # client needs to create file and receive file binary
+        download_speed()
 
     except sqlite3.Error as e:
         message = f"Database error: {e}."
@@ -78,16 +102,33 @@ def upload(conn, filename, cwd):
     
         print("Receiving file...")
 
-        fileData = b""
-        while True:
-            data = conn.recv(BUFFER_SIZE)
-            if b"EOF" in data:
-                fileData += data.replace(b"EOF", b"")
-                break
-            fileData += data
+        fileData = [b""]
+        def upload_speed(fileData_):
+            # starting timer
+            start_timer = time.time()
+            try:
+                while True:
+                    data = conn.recv(BUFFER_SIZE)
+                    if b"EOF" in data:
+                        fileData_[0] += data.replace(b"EOF", b"")
+                        break
+                    fileData_[0] += data
 
+                size = len(fileData_[0])
+                # ending timer
+                end_timer = time.time()
+                # calculations for file transfer rate and upload speed
+                duration = end_timer - start_timer
+                speed = (size / duration) * 8 / 1e6 # calculated in Mbps
+                # metrics that are printed are: file size, file transfer rate, and upload speed
+                print(f'File Received: {size} bytes in {duration: .2f} secs. Speed: {speed: .2f} Mbps')
+
+            except Exception as e:
+                print(f'Error during download: {e}')
+
+        upload_speed(fileData)
+        fileData = fileData[0]
         print(f"File: '{filename}' received")
-
         type = get_file_type(filename)
         gb = len(fileData) / 1000000000
         max_size = get_max_size(type)
